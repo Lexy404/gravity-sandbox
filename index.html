@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Gravitational Sandbox & N-Body Simulator</title>
+  <style>
+    :root {
+      --bg-color: #04060d;
+      --panel-bg: rgba(12, 16, 32, 0.78);
+      --panel-border: rgba(0, 243, 255, 0.28);
+      --panel-border-focus: #00f3ff;
+      --accent-cyan: #00f3ff;
+      --accent-magenta: #ff007f;
+      --accent-purple: #a855f7;
+      --accent-gold: #ffb703;
+      --accent-emerald: #10b981;
+      --text-main: #f0f6fc;
+      --text-muted: #8b9bb4;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      font-family: var(--font-family);
+      color: var(--text-main);
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    /* Glassmorphism Panel */
+    .glass-panel {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 320px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--panel-bg);
+      backdrop-filter: blur(18px) saturate(180%);
+      -webkit-backdrop-filter: blur(18px) saturate(180%);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 243, 255, 0.12);
+      z-index: 10;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    }
+
+    .glass-panel.collapsed {
+      transform: translateX(calc(100% + 20px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .glass-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .glass-panel::-webkit-scrollbar-thumb {
+      background: rgba(0, 243, 255, 0.3);
+      border-radius: 4px;
+    }
+
+    /* Toggle Panel Button */
+    #panel-toggle-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 11;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      transition: all 0.25s ease;
+    }
+    #panel-toggle-btn:hover {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+      transform: scale(1.05);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      background: linear-gradient(120deg, #00f3ff, #ff007f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-badge {
+      font-size: 10px;
+      font-weight: 600;
+      color: #00f3ff;
+      background: rgba(0, 243, 255, 0.12);
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      padding: 2px 7px;
+      border-radius: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Section Styles */
+    .control-section {
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-title span.val {
+      color: var(--accent-cyan);
+      font-family: monospace;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    /* Slider styling */
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .slider-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #cad5e2;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+      margin: 4px 0 2px 0;
+      transition: background 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--accent-cyan);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+      background: #ffffff;
+      box-shadow: 0 0 14px #00f3ff;
+    }
+
+    /* Mode Selector Buttons */
+    .segmented-control {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .segment-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #94a3b8;
+      padding: 7px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .segment-btn:hover {
+      background: rgba(0, 243, 255, 0.1);
+      color: #e2e8f0;
+      border-color: rgba(0, 243, 255, 0.4);
+    }
+
+    .segment-btn.active {
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(255, 0, 127, 0.2));
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.3);
+    }
+
+    /* Preset & Action Buttons */
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 7px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(0, 243, 255, 0.14);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.25), rgba(168, 85, 247, 0.25));
+      border-color: rgba(0, 243, 255, 0.5);
+    }
+
+    .btn.primary:hover {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(0, 243, 255, 0.5);
+    }
+
+    .btn.danger {
+      border-color: rgba(255, 0, 127, 0.4);
+      color: #ff5599;
+    }
+
+    .btn.danger:hover {
+      background: rgba(255, 0, 127, 0.2);
+      border-color: var(--accent-magenta);
+      box-shadow: 0 0 14px rgba(255, 0, 127, 0.4);
+      color: #fff;
+    }
+
+    /* Select Dropdown */
+    .custom-select {
+      width: 100%;
+      background: rgba(18, 24, 45, 0.8);
+      border: 1px solid rgba(0, 243, 255, 0.25);
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+
+    .custom-select:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+    }
+
+    /* HUD Stats at top-left */
+    #hud-overlay {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .hud-card {
+      background: rgba(10, 14, 28, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 8px 14px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      font-size: 11px;
+      font-family: monospace;
+      color: #94a3b8;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .hud-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hud-item strong {
+      color: #ffffff;
+      font-size: 12px;
+    }
+
+    .hud-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00f3ff;
+      box-shadow: 0 0 6px #00f3ff;
+    }
+
+    /* Bottom Quick-Hint Bar */
+    #hint-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(12, 16, 32, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(0, 243, 255, 0.25);
+      border-radius: 30px;
+      padding: 8px 20px;
+      font-size: 11px;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 243, 255, 0.1);
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #hint-bar kbd {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      color: var(--accent-cyan);
+      font-family: monospace;
+    }
+
+    @media (max-width: 768px) {
+      .glass-panel {
+        width: 280px;
+        top: 60px;
+        right: 12px;
+      }
+      #hint-bar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Canvas -->
+  <div id="canvas-container">
+    <canvas id="simCanvas"></canvas>
+  </div>
+
+  <!-- HUD Realtime Stats -->
+  <div id="hud-overlay">
+    <div class="hud-card">
+      <div class="hud-item"><div class="hud-dot"></div> <span id="hud-fps">60 FPS</span></div>
+      <div class="hud-item"><span>Particles:</span> <strong id="hud-particles">0</strong></div>
+      <div class="hud-item"><span>Attractors:</span> <strong id="hud-attractors">0</strong></div>
+    </div>
+  </div>
+
+  <!-- Bottom Interaction Quick Tip -->
+  <div id="hint-bar">
+    <span>✨ <strong>Left Click:</strong> Spawn Attractor</span>
+    <span>🚀 <strong>Drag & Fling:</strong> Launch Swarm</span>
+    <span><kbd>Space</kbd> Pause</span>
+    <span><kbd>C</kbd> Clear</span>
+    <span><kbd>H</kbd> Hide UI</span>
+  </div>
+
+  <!-- Floating Toggle Button -->
+  <button id="panel-toggle-btn" title="Toggle Control Panel [H]">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
+  <!-- Glassmorphism Control Panel -->
+  <aside class="glass-panel" id="controlPanel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+          <path d="M2 12h20"></path>
+        </svg>
+        Neon Gravity N-Body
+      </div>
+      <div class="live-badge">SIM ACTIVE</div>
+    </div>
+
+    <!-- Mouse Interaction Mode -->
+    <div class="control-section">
+      <div class="section-title">Interaction Mode</div>
+      <div class="segmented-control">
+        <button class="segment-btn active" id="mode-auto" data-mode="auto" title="Click: Attractor | Drag: Swarm">⚡ Auto (Click/Drag)</button>
+        <button class="segment-btn" id="mode-attractor" data-mode="attractor" title="Always place attractor">🪐 Attractor Only</button>
+        <button class="segment-btn" id="mode-swarm" data-mode="swarm" title="Always fling swarm">☄️ Swarm Only</button>
+        <button class="segment-btn" id="mode-orbit" data-mode="orbit" title="Fling swarm in auto circular orbit">💫 Orbital Swarm</button>
+      </div>
+    </div>
+
+    <!-- Physics Parameters -->
+    <div class="control-section">
+      <div class="section-title">
+        <span>Gravitational Constant (G)</span>
+        <span class="val" id="val-gravity">1.50</span>
+      </div>
+      <div class="slider-row">
+        <input type="range" id="param-gravity" min="0.1" max="6.0" step="0.05" value="1.50">
+      </div>
+
+      <div class="section-title" style="margin-top: 10px;">
+        <span>Trail Persistence</span>
+        <span class="val" id="val-trail">0.18</span>
+      </div>
+      <div class="slider-row">
+        <input type="range" id="param-trail" min="0.02" max="0.50" step="0.01" value="0.18">
+      </div>
+
+      <div class="section-title" style="margin-top: 10px;">
+        <span>Swarm Particle Count</span>
+        <span class="val" id="val-count">65</span>
+      </div>
+      <div class="slider-row">
+        <input type="range" id="param-count" min="10" max="250" step="5" value="65">
+      </div>
+
+      <div class="section-title" style="margin-top: 10px;">
+        <span>New Attractor Mass</span>
+        <span class="val" id="val-mass">10,000</span>
+      </div>
+      <div class="slider-row">
+        <input type="range" id="param-mass" min="1000" max="40000" step="500" value="10000">
+      </div>
+    </div>
+
+    <!-- Attractor Personality & Palette -->
+    <div class="control-section">
+      <div class="section-title">Attractor Style</div>
+      <select class="custom-select" id="attractor-style">
+        <option value="singularity">Singularity / Black Hole (Event Horizon)</option>
+        <option value="pulsar">Pulsar / Neutron Star (Cyan Pulse)</option>
+        <option value="sun">Hyper-Giant Sun (Solar Corona)</option>
+        <option value="violet">Cosmic Void Portal (Violet Warp)</option>
+      </select>
+
+      <div class="section-title" style="margin-top: 6px;">Swarm Neon Palette</div>
+      <select class="custom-select" id="swarm-palette">
+        <option value="velocity">Velocity Shift (Relativistic Blue/Pink/White)</option>
+        <option value="cyan">Neon Cyberpunk Cyan</option>
+        <option value="magenta">Electric Magenta / Hot Pink</option>
+        <option value="aurora">Cosmic Aurora (Green/Teal/Purple)</option>
+        <option value="gold">Solar Gold & Flare</option>
+      </select>
+    </div>
+
+    <!-- Presets -->
+    <div class="control-section">
+      <div class="section-title">Orbital Presets</div>
+      <div class="button-grid">
+        <button class="btn primary" id="btn-solar">🪐 Solar System</button>
+        <button class="btn" id="btn-binary">💫 Binary Star</button>
+        <button class="btn" id="btn-galaxy">🌌 Galaxy Smash</button>
+        <button class="btn" id="btn-figure8">♾️ Figure-8 Orbit</button>
+      </div>
+    </div>
+
+    <!-- Action Controls -->
+    <div class="control-section">
+      <div class="section-title">Simulation Controls</div>
+      <div class="button-grid">
+        <button class="btn" id="btn-pause">⏸️ Pause</button>
+        <button class="btn" id="btn-clear-particles">🧹 Clear Dust</button>
+        <button class="btn danger" style="grid-column: span 2;" id="btn-clear-all">⚡ Clear Everything</button>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    /**
+     * NEON GRAVITATIONAL SANDBOX & N-BODY SIMULATOR
+     * Fully self-contained, zero-dependency HTML5 Canvas Physics Engine.
+     */
+
+    // --- Canvas & HiDPI Setup ---
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+
+    function resizeCanvas() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // --- Configuration State ---
+    const config = {
+      G: 1.50,               // Gravitational constant
+      trailAlpha: 0.18,       // Background trail clear alpha (lower = longer trails)
+      swarmSize: 65,          // Particles spawned per fling
+      attractorMass: 10000,   // Mass of placed attractors
+      softening: 14.0,        // Softening factor epsilon to prevent infinite acceleration
+      interactionMode: 'auto',// 'auto', 'attractor', 'swarm', 'orbit'
+      attractorStyle: 'singularity',
+      swarmPalette: 'velocity',
+      isPaused: false,
+      maxParticles: 3500
+    };
+
+    // --- Simulation Objects Arrays ---
+    const attractors = [];
+    const particles = [];
+    const shockwaves = [];
+
+    // --- Palette Definitions ---
+    const PALETTES = {
+      cyan: ['#00f3ff', '#38bdf8', '#0284c7', '#7dd3fc'],
+      magenta: ['#ff007f', '#ec4899', '#f43f5e', '#fb7185'],
+      aurora: ['#10b981', '#06b6d4', '#a855f7', '#6366f1'],
+      gold: ['#ffb703', '#fb8500', '#f59e0b', '#fde047']
+    };
+
+    // --- Shockwave Pulse Class (Triggered on Attractor Spawn / Accretion burst) ---
+    class Shockwave {
+      constructor(x, y, maxRadius = 140, color = '#00f3ff') {
+        this.x = x;
+        this.y = y;
+        this.radius = 4;
+        this.maxRadius = maxRadius;
+        this.color = color;
+        this.life = 1.0;
+        this.decay = 0.022;
+      }
+
+      update() {
+        this.radius += (this.maxRadius - this.radius) * 0.08 + 1.2;
+        this.life -= this.decay;
+        return this.life > 0;
+      }
+
+      draw(c) {
+        c.save();
+        c.beginPath();
+        c.arc(this.x, this.y, Math.max(1, this.radius), 0, Math.PI * 2);
+        c.lineWidth = Math.max(0.5, 3 * this.life);
+        c.strokeStyle = this.color;
+        c.globalAlpha = Math.max(0, this.life * 0.85);
+        c.shadowColor = this.color;
+        c.shadowBlur = 15;
+        c.stroke();
+        c.restore();
+      }
+    }
+
+    // --- Heavy Gravitational Attractor Class (Star / Singularity) ---
+    class Attractor {
+      constructor(x, y, mass, style = 'singularity', vx = 0, vy = 0) {
+        this.x = x;
+        this.y = y;
+        this.prevX = x;
+        this.prevY = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.ax = 0;
+        this.ay = 0;
+        this.mass = mass;
+        this.style = style;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.spinRate = 0.025 + Math.random() * 0.02;
+        this.pulsePhase = Math.random() * Math.PI * 2;
+        this.fixed = false; // If true, unaffected by other attractors
+
+        // Radius scales logarithmically with mass
+        this.radius = Math.max(10, Math.min(36, Math.log10(this.mass) * 7.5));
+      }
+
+      update(dt = 1) {
+        if (!this.fixed) {
+          // Velocity Verlet / Euler step for attractors
+          this.x += this.vx * dt + 0.5 * this.ax * dt * dt;
+          this.y += this.vy * dt + 0.5 * this.ay * dt * dt;
+        }
+        this.rotation += this.spinRate * dt;
+        this.pulsePhase += 0.04 * dt;
+      }
+
+      draw(c) {
+        c.save();
+        const pulse = Math.sin(this.pulsePhase) * 2;
+        const r = this.radius + pulse;
+
+        if (this.style === 'singularity') {
+          // --- Black Hole with Glowing Relativistic Accretion Disk ---
+          // Outer Accretion Glow
+          const outerGlow = c.createRadialGradient(this.x, this.y, r * 0.8, this.x, this.y, r * 3.4);
+          outerGlow.addColorStop(0, 'rgba(0, 243, 255, 0.7)');
+          outerGlow.addColorStop(0.35, 'rgba(168, 85, 247, 0.45)');
+          outerGlow.addColorStop(0.75, 'rgba(255, 0, 127, 0.2)');
+          outerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 3.4, 0, Math.PI * 2);
+          c.fillStyle = outerGlow;
+          c.fill();
+
+          // Rotating Accretion Ring Ellipse
+          c.save();
+          c.translate(this.x, this.y);
+          c.rotate(this.rotation);
+          c.beginPath();
+          c.ellipse(0, 0, r * 2.4, r * 0.9, 0, 0, Math.PI * 2);
+          c.strokeStyle = 'rgba(0, 243, 255, 0.65)';
+          c.lineWidth = 3.5;
+          c.shadowColor = '#00f3ff';
+          c.shadowBlur = 18;
+          c.stroke();
+          c.restore();
+
+          // Photon Sphere (Intense narrow glowing halo)
+          c.beginPath();
+          c.arc(this.x, this.y, r * 1.15, 0, Math.PI * 2);
+          c.strokeStyle = '#ffffff';
+          c.lineWidth = 2.5;
+          c.shadowColor = '#00f3ff';
+          c.shadowBlur = 14;
+          c.stroke();
+
+          // Event Horizon Core (True pitch black void)
+          c.beginPath();
+          c.arc(this.x, this.y, r, 0, Math.PI * 2);
+          c.fillStyle = '#020308';
+          c.fill();
+
+        } else if (this.style === 'pulsar') {
+          // --- Pulsar / Neutron Star (Electrified Cyan & Violet Jets) ---
+          const glow = c.createRadialGradient(this.x, this.y, 2, this.x, this.y, r * 2.8);
+          glow.addColorStop(0, '#ffffff');
+          glow.addColorStop(0.2, '#00f3ff');
+          glow.addColorStop(0.6, 'rgba(0, 243, 255, 0.25)');
+          glow.addColorStop(1, 'transparent');
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 2.8, 0, Math.PI * 2);
+          c.fillStyle = glow;
+          c.fill();
+
+          // Pulsing Core
+          c.beginPath();
+          c.arc(this.x, this.y, r * 0.9, 0, Math.PI * 2);
+          c.fillStyle = '#f0fdff';
+          c.shadowColor = '#00f3ff';
+          c.shadowBlur = 24;
+          c.fill();
+
+          // Rotating Radiation Jets
+          c.save();
+          c.translate(this.x, this.y);
+          c.rotate(this.rotation * 2.5);
+          c.strokeStyle = 'rgba(0, 243, 255, 0.8)';
+          c.lineWidth = 2;
+          c.beginPath();
+          c.moveTo(0, -r * 3.5);
+          c.lineTo(0, r * 3.5);
+          c.stroke();
+          c.restore();
+
+        } else if (this.style === 'sun') {
+          // --- Hyper-Giant Star (Solar Corona, Blazing Gold/Amber) ---
+          const corona = c.createRadialGradient(this.x, this.y, r * 0.5, this.x, this.y, r * 3.0);
+          corona.addColorStop(0, '#ffffff');
+          corona.addColorStop(0.25, '#ffdd00');
+          corona.addColorStop(0.6, 'rgba(255, 100, 0, 0.4)');
+          corona.addColorStop(1, 'rgba(255, 50, 0, 0)');
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 3.0, 0, Math.PI * 2);
+          c.fillStyle = corona;
+          c.fill();
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 0.95, 0, Math.PI * 2);
+          c.fillStyle = '#fff4cc';
+          c.shadowColor = '#ffaa00';
+          c.shadowBlur = 25;
+          c.fill();
+
+        } else {
+          // --- Cosmic Void Portal (Violet Warp) ---
+          const portal = c.createRadialGradient(this.x, this.y, r * 0.4, this.x, this.y, r * 3.2);
+          portal.addColorStop(0, '#f5d0fe');
+          portal.addColorStop(0.3, '#c084fc');
+          portal.addColorStop(0.7, 'rgba(147, 51, 234, 0.3)');
+          portal.addColorStop(1, 'transparent');
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 3.2, 0, Math.PI * 2);
+          c.fillStyle = portal;
+          c.fill();
+
+          c.beginPath();
+          c.arc(this.x, this.y, r * 0.8, 0, Math.PI * 2);
+          c.fillStyle = '#1e0538';
+          c.strokeStyle = '#e879f9';
+          c.lineWidth = 3;
+          c.shadowColor = '#d946ef';
+          c.shadowBlur = 20;
+          c.stroke();
+          c.fill();
+        }
+
+        c.restore();
+      }
+    }
+
+    // --- Particle Class (Newtonian Gravity with Velocity Verlet Integration) ---
+    class Particle {
+      constructor(x, y, vx, vy, color = null) {
+        this.x = x;
+        this.y = y;
+        this.prevX = x;
+        this.prevY = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.ax = 0;
+        this.ay = 0;
+        this.mass = 1;
+        this.color = color;
+        this.speed = Math.hypot(vx, vy);
+        this.life = 0;
+      }
+
+      // 1st step of Velocity Verlet: update positions and half-step velocity
+      integratePosition(dt = 1) {
+        this.prevX = this.x;
+        this.prevY = this.y;
+        this.x += this.vx * dt + 0.5 * this.ax * dt * dt;
+        this.y += this.vy * dt + 0.5 * this.ay * dt * dt;
+        this.life++;
+      }
+
+      // 2nd step of Velocity Verlet: update velocities using new acceleration
+      integrateVelocity(newAx, newAy, dt = 1) {
+        this.vx += 0.5 * (this.ax + newAx) * dt;
+        this.vy += 0.5 * (this.ay + newAy) * dt;
+        this.ax = newAx;
+        this.ay = newAy;
+        this.speed = Math.hypot(this.vx, this.vy);
+      }
+
+      getColor() {
+        if (this.color) return this.color;
+
+        if (config.swarmPalette === 'velocity') {
+          // Dynamic relativistic blueshift / neon heat based on speed
+          const s = this.speed;
+          if (s < 2.0) return '#6366f1'; // Deep indigo/violet
+          if (s < 4.5) return '#00f3ff'; // Electric Cyan
+          if (s < 7.5) return '#10b981'; // Emerald
+          if (s < 12.0) return '#ff007f'; // Hot Magenta
+          return '#ffffff';              // Blinding White Relativistic
+        }
+
+        const pal = PALETTES[config.swarmPalette] || PALETTES.cyan;
+        return pal[Math.floor((this.life * 0.1) % pal.length)];
+      }
+
+      draw(c) {
+        const col = this.getColor();
+        c.strokeStyle = col;
+        c.lineWidth = Math.min(2.8, Math.max(1.2, this.speed * 0.35));
+
+        c.beginPath();
+        c.moveTo(this.prevX, this.prevY);
+        c.lineTo(this.x, this.y);
+        c.stroke();
+      }
+    }
+
+    // --- Physics Computation & N-Body Solver ---
+    function updatePhysics() {
+      if (config.isPaused) return;
+
+      const dt = 1.0;
+      const G = config.G;
+      const epsSq = config.softening * config.softening;
+
+      // 1. Attractor-Attractor Mutual N-body Gravity
+      const numAttractors = attractors.length;
+      for (let i = 0; i < numAttractors; i++) {
+        const a1 = attractors[i];
+        let newAx = 0;
+        let newAy = 0;
+
+        for (let j = 0; j < numAttractors; j++) {
+          if (i === j) continue;
+          const a2 = attractors[j];
+          const dx = a2.x - a1.x;
+          const dy = a2.y - a1.y;
+          const distSq = dx * dx + dy * dy + epsSq * 2.0;
+          const dist = Math.sqrt(distSq);
+          const force = (G * a2.mass) / (distSq * dist);
+          newAx += dx * force;
+          newAy += dy * force;
+        }
+
+        a1.vx += (a1.ax + newAx) * 0.5 * dt;
+        a1.vy += (a1.ay + newAy) * 0.5 * dt;
+        a1.ax = newAx;
+        a1.ay = newAy;
+        a1.update(dt);
+      }
+
+      // 2. Particle Physics using Velocity Verlet
+      const numParticles = particles.length;
+      for (let i = numParticles - 1; i >= 0; i--) {
+        const p = particles[i];
+
+        // Step 1: Update position
+        p.integratePosition(dt);
+
+        // Step 2: Compute new acceleration from all attractors
+        let newAx = 0;
+        let newAy = 0;
+
+        for (let j = 0; j < numAttractors; j++) {
+          const a = attractors[j];
+          const dx = a.x - p.x;
+          const dy = a.y - p.y;
+          const distSq = dx * dx + dy * dy + epsSq;
+          const dist = Math.sqrt(distSq);
+          const force = (G * a.mass) / (distSq * dist);
+          newAx += dx * force;
+          newAy += dy * force;
+        }
+
+        // Step 3: Complete Verlet velocity update
+        p.integrateVelocity(newAx, newAy, dt);
+
+        // Boundary prune: Remove if wandered way too far (3x screen bounds)
+        const margin = 1200;
+        if (
+          p.x < -margin || p.x > width + margin ||
+          p.y < -margin || p.y > height + margin
+        ) {
+          particles.splice(i, 1);
+        }
+      }
+
+      // 3. Shockwave animations
+      for (let i = shockwaves.length - 1; i >= 0; i--) {
+        if (!shockwaves[i].update()) {
+          shockwaves.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Render Loop ---
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+    const hudFps = document.getElementById('hud-fps');
+    const hudParticles = document.getElementById('hud-particles');
+    const hudAttractors = document.getElementById('hud-attractors');
+
+    function render(currentTime) {
+      requestAnimationFrame(render);
+
+      // FPS calculation
+      frameCount++;
+      if (currentTime - lastTime >= 500) {
+        fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+        hudFps.textContent = `${fps} FPS`;
+        hudParticles.textContent = particles.length.toLocaleString();
+        hudAttractors.textContent = attractors.length.toLocaleString();
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+
+      // Fade canvas to produce neon glowing persistent motion trails
+      ctx.fillStyle = `rgba(4, 6, 13, ${config.trailAlpha})`;
+      ctx.fillRect(0, 0, width, height);
+
+      // Physics update
+      updatePhysics();
+
+      // Render shockwaves
+      for (let i = 0; i < shockwaves.length; i++) {
+        shockwaves[i].draw(ctx);
+      }
+
+      // Render particles with additive neon blend mode
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].draw(ctx);
+      }
+      ctx.restore();
+
+      // Render attractors on top
+      for (let i = 0; i < attractors.length; i++) {
+        attractors[i].draw(ctx);
+      }
+
+      // Render drag slingshot vector preview if dragging
+      drawDragPreview();
+    }
+
+    // --- Interactive Mouse & Drag Handling ---
+    let isMouseDown = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragCurrentX = 0;
+    let dragCurrentY = 0;
+    let mouseDownTime = 0;
+
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // Only primary click
+      const coords = getCanvasCoords(e);
+      isMouseDown = true;
+      dragStartX = coords.x;
+      dragStartY = coords.y;
+      dragCurrentX = coords.x;
+      dragCurrentY = coords.y;
+      mouseDownTime = performance.now();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return;
+      const coords = getCanvasCoords(e);
+      dragCurrentX = coords.x;
+      dragCurrentY = coords.y;
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isMouseDown) return;
+      isMouseDown = false;
+      const coords = getCanvasCoords(e);
+      const dx = coords.x - dragStartX;
+      const dy = coords.y - dragStartY;
+      const dist = Math.hypot(dx, dy);
+      const elapsed = performance.now() - mouseDownTime;
+
+      const mode = config.interactionMode;
+
+      // Determine action based on mode and gesture
+      if (mode === 'attractor') {
+        spawnAttractor(coords.x, coords.y);
+      } else if (mode === 'swarm') {
+        flingSwarm(dragStartX, dragStartY, dx * 0.05, dy * 0.05);
+      } else if (mode === 'orbit') {
+        flingOrbitalSwarm(dragStartX, dragStartY);
+      } else {
+        // 'auto' mode: Tap/short distance = Attractor; Drag distance > 14px = Fling Swarm
+        if (dist < 14 && elapsed < 350) {
+          spawnAttractor(dragStartX, dragStartY);
+        } else {
+          flingSwarm(dragStartX, dragStartY, dx * 0.055, dy * 0.055);
+        }
+      }
+    });
+
+    // Touch event support for mobile / touch screens
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) return;
+      const coords = getCanvasCoords(e);
+      isMouseDown = true;
+      dragStartX = coords.x;
+      dragStartY = coords.y;
+      dragCurrentX = coords.x;
+      dragCurrentY = coords.y;
+      mouseDownTime = performance.now();
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!isMouseDown || e.touches.length > 1) return;
+      const coords = getCanvasCoords(e);
+      dragCurrentX = coords.x;
+      dragCurrentY = coords.y;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (!isMouseDown) return;
+      isMouseDown = false;
+      const dx = dragCurrentX - dragStartX;
+      const dy = dragCurrentY - dragStartY;
+      const dist = Math.hypot(dx, dy);
+      const elapsed = performance.now() - mouseDownTime;
+
+      if (dist < 15 && elapsed < 350) {
+        spawnAttractor(dragStartX, dragStartY);
+      } else {
+        flingSwarm(dragStartX, dragStartY, dx * 0.055, dy * 0.055);
+      }
+    });
+
+    // --- Action Methods: Spawn Attractor & Swarm ---
+    function spawnAttractor(x, y, mass = null, style = null) {
+      const finalMass = mass !== null ? mass : config.attractorMass;
+      const finalStyle = style !== null ? style : config.attractorStyle;
+
+      const attractor = new Attractor(x, y, finalMass, finalStyle);
+      attractors.push(attractor);
+
+      // Trigger Accretion Disk Pulse Shockwave
+      const waveColor = finalStyle === 'sun' ? '#ffaa00' :
+                        finalStyle === 'violet' ? '#d946ef' : '#00f3ff';
+      shockwaves.push(new Shockwave(x, y, attractor.radius * 6, waveColor));
+      shockwaves.push(new Shockwave(x, y, attractor.radius * 3.5, '#ffffff'));
+    }
+
+    function flingSwarm(originX, originY, baseVx, baseVy) {
+      const count = config.swarmSize;
+      const spread = 20;
+
+      for (let i = 0; i < count; i++) {
+        if (particles.length >= config.maxParticles) {
+          particles.shift(); // keep array within limits
+        }
+
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * spread;
+        const px = originX + Math.cos(angle) * r;
+        const py = originY + Math.sin(angle) * r;
+
+        // Slight velocity cone dispersion
+        const speedJitter = 0.85 + Math.random() * 0.3;
+        const angleJitter = (Math.random() - 0.5) * 0.25;
+
+        const currentSpeed = Math.hypot(baseVx, baseVy);
+        const currentAngle = Math.atan2(baseVy, baseVx) + angleJitter;
+        const finalVx = Math.cos(currentAngle) * currentSpeed * speedJitter;
+        const finalVy = Math.sin(currentAngle) * currentSpeed * speedJitter;
+
+        particles.push(new Particle(px, py, finalVx, finalVy));
+      }
+    }
+
+    function flingOrbitalSwarm(x, y) {
+      if (attractors.length === 0) {
+        flingSwarm(x, y, 1.5, 0);
+        return;
+      }
+
+      // Find nearest attractor
+      let nearest = attractors[0];
+      let minDistSq = Infinity;
+      for (const a of attractors) {
+        const dSq = (a.x - x) * (a.x - x) + (a.y - y) * (a.y - y);
+        if (dSq < minDistSq) {
+          minDistSq = dSq;
+          nearest = a;
+        }
+      }
+
+      const dx = x - nearest.x;
+      const dy = y - nearest.y;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r < 5) return;
+
+      // Keplerian circular orbital speed: v = sqrt(G * M * r / (r^2 + eps^2)^1.5) * r
+      const epsSq = config.softening * config.softening;
+      const orbitalSpeed = r * Math.sqrt((config.G * nearest.mass) / Math.pow(r * r + epsSq, 1.5));
+
+      // Perpendicular vector for counter-clockwise orbit (+ attractor's own velocity)
+      const vx = -dy / r * orbitalSpeed + nearest.vx;
+      const vy = dx / r * orbitalSpeed + nearest.vy;
+
+      flingSwarm(x, y, vx, vy);
+    }
+
+    // --- Slingshot Aiming Reticle & Trajectory Visualizer ---
+    function drawDragPreview() {
+      if (!isMouseDown) return;
+
+      const dx = dragCurrentX - dragStartX;
+      const dy = dragCurrentY - dragStartY;
+      const dist = Math.hypot(dx, dy);
+
+      ctx.save();
+      if (dist > 12) {
+        // Draw Fling Slingshot Vector
+        ctx.beginPath();
+        ctx.moveTo(dragStartX, dragStartY);
+        ctx.lineTo(dragCurrentX, dragCurrentY);
+        ctx.strokeStyle = '#00f3ff';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.shadowColor = '#00f3ff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        // Arrow head
+        const angle = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(dragCurrentX, dragCurrentY);
+        ctx.lineTo(
+          dragCurrentX - 12 * Math.cos(angle - Math.PI / 6),
+          dragCurrentY - 12 * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          dragCurrentX - 12 * Math.cos(angle + Math.PI / 6),
+          dragCurrentY - 12 * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fillStyle = '#00f3ff';
+        ctx.fill();
+
+        // Origin spawn circle
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(dragStartX, dragStartY, 14, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ff007f';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+      } else {
+        // Attractor spawn reticle preview
+        ctx.beginPath();
+        ctx.arc(dragStartX, dragStartY, 22, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // --- Presets Implementation ---
+
+    // 1. Solar System Preset
+    function loadPresetSolarSystem() {
+      attractors.length = 0;
+      particles.length = 0;
+      shockwaves.length = 0;
+
+      const cx = width / 2;
+      const cy = height / 2;
+
+      // Central Sun
+      const sunMass = 22000;
+      const sun = new Attractor(cx, cy, sunMass, 'sun');
+      sun.fixed = true;
+      attractors.push(sun);
+
+      // Planets definitions (orbital distance, mass, color, size, particle moons)
+      const planets = [
+        { name: 'Mercury', r: 85,  m: 350,  color: '#94a3b8', style: 'pulsar' },
+        { name: 'Venus',   r: 135, m: 550,  color: '#f59e0b', style: 'sun' },
+        { name: 'Earth',   r: 195, m: 650,  color: '#00f3ff', style: 'pulsar' },
+        { name: 'Mars',    r: 260, m: 450,  color: '#ef4444', style: 'sun' },
+        { name: 'Jupiter', r: 370, m: 2800, color: '#fb923c', style: 'sun' },
+        { name: 'Saturn',  r: 490, m: 1800, color: '#fde047', style: 'sun' }
+      ];
+
+      const epsSq = config.softening * config.softening;
+
+      planets.forEach((p, idx) => {
+        const angle = (idx * (Math.PI * 2 / planets.length)) + Math.random() * 0.5;
+        const px = cx + Math.cos(angle) * p.r;
+        const py = cy + Math.sin(angle) * p.r;
+
+        // Perfect Keplerian orbital velocity
+        const v = p.r * Math.sqrt((config.G * sunMass) / Math.pow(p.r * p.r + epsSq, 1.5));
+        const vx = -Math.sin(angle) * v;
+        const vy = Math.cos(angle) * v;
+
+        const planetAttractor = new Attractor(px, py, p.m, p.style, vx, vy);
+        planetAttractor.radius = Math.max(7, Math.min(18, Math.log10(p.m) * 4));
+        attractors.push(planetAttractor);
+      });
+
+      // Asteroid Belt between Mars & Jupiter (r ~ 290 to 330)
+      const asteroidCount = 400;
+      for (let i = 0; i < asteroidCount; i++) {
+        const r = 290 + Math.random() * 45;
+        const angle = Math.random() * Math.PI * 2;
+        const ax = cx + Math.cos(angle) * r;
+        const ay = cy + Math.sin(angle) * r;
+        const v = r * Math.sqrt((config.G * sunMass) / Math.pow(r * r + epsSq, 1.5)) * (0.98 + Math.random() * 0.04);
+        const vx = -Math.sin(angle) * v;
+        const vy = Math.cos(angle) * v;
+
+        particles.push(new Particle(ax, ay, vx, vy, '#38bdf8'));
+      }
+
+      shockwaves.push(new Shockwave(cx, cy, 220, '#ffb703'));
+    }
+
+    // 2. Binary Star System Preset
+    function loadPresetBinaryStar() {
+      attractors.length = 0;
+      particles.length = 0;
+      shockwaves.length = 0;
+
+      const cx = width / 2;
+      const cy = height / 2;
+      const d = 110;
+      const mass = 12000;
+      const epsSq = config.softening * config.softening;
+
+      // Stable circular orbit calculation for two equal masses
+      const separation = 2 * d;
+      const orbitalSpeed = Math.sqrt((config.G * mass * d * d) / Math.pow(separation * separation + epsSq * 4, 1.5));
+
+      const star1 = new Attractor(cx - d, cy, mass, 'singularity', 0, -orbitalSpeed);
+      const star2 = new Attractor(cx + d, cy, mass, 'pulsar', 0, orbitalSpeed);
+      attractors.push(star1, star2);
+
+      // Circumbinary planetary debris discs
+      const discParticles = 550;
+      for (let i = 0; i < discParticles; i++) {
+        const r = 220 + Math.random() * 180;
+        const angle = Math.random() * Math.PI * 2;
+        const px = cx + Math.cos(angle) * r;
+        const py = cy + Math.sin(angle) * r;
+        // Total central mass = 2 * mass
+        const v = r * Math.sqrt((config.G * (mass * 2)) / Math.pow(r * r + epsSq, 1.5));
+        const vx = -Math.sin(angle) * v;
+        const vy = Math.cos(angle) * v;
+
+        particles.push(new Particle(px, py, vx, vy));
+      }
+
+      shockwaves.push(new Shockwave(cx - d, cy, 140, '#00f3ff'));
+      shockwaves.push(new Shockwave(cx + d, cy, 140, '#ff007f'));
+    }
+
+    // 3. Galaxy Collision Preset (Two colliding disc galaxies with central supermassive black holes)
+    function loadPresetGalaxy() {
+      attractors.length = 0;
+      particles.length = 0;
+      shockwaves.length = 0;
+
+      const cx = width / 2;
+      const cy = height / 2;
+      const offset = Math.min(width, height) * 0.28;
+
+      // Galaxy A (Approaching from left)
+      const bh1 = new Attractor(cx - offset, cy - 60, 16000, 'singularity', 1.2, 0.4);
+      // Galaxy B (Approaching from right)
+      const bh2 = new Attractor(cx + offset, cy + 60, 16000, 'pulsar', -1.2, -0.4);
+      attractors.push(bh1, bh2);
+
+      const epsSq = config.softening * config.softening;
+
+      // Disk A Stars (Cyan)
+      const starsPerGalaxy = 350;
+      for (let i = 0; i < starsPerGalaxy; i++) {
+        const r = 30 + Math.random() * 170;
+        const angle = Math.random() * Math.PI * 2;
+        const px = bh1.x + Math.cos(angle) * r;
+        const py = bh1.y + Math.sin(angle) * r;
+        const orbitalV = r * Math.sqrt((config.G * bh1.mass) / Math.pow(r * r + epsSq, 1.5));
+        const vx = bh1.vx - Math.sin(angle) * orbitalV;
+        const vy = bh1.vy + Math.cos(angle) * orbitalV;
+        particles.push(new Particle(px, py, vx, vy, '#00f3ff'));
+      }
+
+      // Disk B Stars (Hot Magenta)
+      for (let i = 0; i < starsPerGalaxy; i++) {
+        const r = 30 + Math.random() * 170;
+        const angle = Math.random() * Math.PI * 2;
+        const px = bh2.x + Math.cos(angle) * r;
+        const py = bh2.y + Math.sin(angle) * r;
+        const orbitalV = r * Math.sqrt((config.G * bh2.mass) / Math.pow(r * r + epsSq, 1.5));
+        const vx = bh2.vx + Math.sin(angle) * orbitalV; // counter-rotate
+        const vy = bh2.vy - Math.cos(angle) * orbitalV;
+        particles.push(new Particle(px, py, vx, vy, '#ff007f'));
+      }
+
+      shockwaves.push(new Shockwave(bh1.x, bh1.y, 160, '#00f3ff'));
+      shockwaves.push(new Shockwave(bh2.x, bh2.y, 160, '#ff007f'));
+    }
+
+    // 4. Figure-8 Choreography Preset (Chenciner & Montgomery Three-Body solution)
+    function loadPresetFigure8() {
+      attractors.length = 0;
+      particles.length = 0;
+      shockwaves.length = 0;
+
+      const cx = width / 2;
+      const cy = height / 2;
+      const mass = 12000;
+
+      // Scale factors for canvas resolution
+      const scalePos = 240;
+      const baseV = Math.sqrt((config.G * mass) / scalePos);
+
+      // Exact normalized Figure-8 initial values:
+      const x1 = -0.97000436 * scalePos;
+      const y1 = 0.24308753 * scalePos;
+      const vx1 = 0.46620531 * baseV;
+      const vy1 = 0.43236573 * baseV;
+
+      const x2 = -x1;
+      const y2 = -y1;
+      const vx2 = vx1;
+      const vy2 = vy1;
+
+      const x3 = 0;
+      const y3 = 0;
+      const vx3 = -2 * vx1;
+      const vy3 = -2 * vy1;
+
+      attractors.push(
+        new Attractor(cx + x1, cy + y1, mass, 'singularity', vx1, vy1),
+        new Attractor(cx + x2, cy + y2, mass, 'pulsar', vx2, vy2),
+        new Attractor(cx + x3, cy + y3, mass, 'violet', vx3, vy3)
+      );
+
+      // Floating cloud of particles to trace the gravitational dance
+      for (let i = 0; i < 200; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * 80;
+        particles.push(new Particle(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, 0, 0));
+      }
+
+      shockwaves.push(new Shockwave(cx, cy, 180, '#a855f7'));
+    }
+
+    // --- UI Controls & Event Bindings ---
+    const paramGravity = document.getElementById('param-gravity');
+    const valGravity = document.getElementById('val-gravity');
+    paramGravity.addEventListener('input', (e) => {
+      config.G = parseFloat(e.target.value);
+      valGravity.textContent = config.G.toFixed(2);
+    });
+
+    const paramTrail = document.getElementById('param-trail');
+    const valTrail = document.getElementById('val-trail');
+    paramTrail.addEventListener('input', (e) => {
+      config.trailAlpha = parseFloat(e.target.value);
+      valTrail.textContent = config.trailAlpha.toFixed(2);
+    });
+
+    const paramCount = document.getElementById('param-count');
+    const valCount = document.getElementById('val-count');
+    paramCount.addEventListener('input', (e) => {
+      config.swarmSize = parseInt(e.target.value, 10);
+      valCount.textContent = config.swarmSize;
+    });
+
+    const paramMass = document.getElementById('param-mass');
+    const valMass = document.getElementById('val-mass');
+    paramMass.addEventListener('input', (e) => {
+      config.attractorMass = parseInt(e.target.value, 10);
+      valMass.textContent = config.attractorMass.toLocaleString();
+    });
+
+    // Mode Selector Buttons
+    const modeButtons = document.querySelectorAll('.segment-btn');
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        config.interactionMode = btn.dataset.mode;
+      });
+    });
+
+    // Style & Palette dropdowns
+    document.getElementById('attractor-style').addEventListener('change', (e) => {
+      config.attractorStyle = e.target.value;
+    });
+    document.getElementById('swarm-palette').addEventListener('change', (e) => {
+      config.swarmPalette = e.target.value;
+    });
+
+    // Presets Buttons
+    document.getElementById('btn-solar').addEventListener('click', loadPresetSolarSystem);
+    document.getElementById('btn-binary').addEventListener('click', loadPresetBinaryStar);
+    document.getElementById('btn-galaxy').addEventListener('click', loadPresetGalaxy);
+    document.getElementById('btn-figure8').addEventListener('click', loadPresetFigure8);
+
+    // Pause / Play
+    const btnPause = document.getElementById('btn-pause');
+    btnPause.addEventListener('click', () => {
+      config.isPaused = !config.isPaused;
+      btnPause.innerHTML = config.isPaused ? '▶️ Resume' : '⏸️ Pause';
+      btnPause.classList.toggle('primary', config.isPaused);
+    });
+
+    // Clear Particles
+    document.getElementById('btn-clear-particles').addEventListener('click', () => {
+      particles.length = 0;
+    });
+
+    // Clear All
+    document.getElementById('btn-clear-all').addEventListener('click', () => {
+      particles.length = 0;
+      attractors.length = 0;
+      shockwaves.length = 0;
+      ctx.fillStyle = '#04060d';
+      ctx.fillRect(0, 0, width, height);
+    });
+
+    // Panel Toggle Hide/Show
+    const controlPanel = document.getElementById('controlPanel');
+    const panelToggleBtn = document.getElementById('panel-toggle-btn');
+    function togglePanel() {
+      controlPanel.classList.toggle('collapsed');
+    }
+    panelToggleBtn.addEventListener('click', togglePanel);
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      // Don't intercept if user is somehow focusing an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+      switch(e.code) {
+        case 'Space':
+          e.preventDefault();
+          btnPause.click();
+          break;
+        case 'KeyH':
+          togglePanel();
+          break;
+        case 'KeyC':
+          if (e.shiftKey) {
+            document.getElementById('btn-clear-all').click();
+          } else {
+            document.getElementById('btn-clear-particles').click();
+          }
+          break;
+        case 'Digit1':
+          loadPresetSolarSystem();
+          break;
+        case 'Digit2':
+          loadPresetBinaryStar();
+          break;
+        case 'Digit3':
+          loadPresetGalaxy();
+          break;
+        case 'Digit4':
+          loadPresetFigure8();
+          break;
+      }
+    });
+
+    // --- Boot Initial System ---
+    // Start with Solar System by default for an immediate breathtaking view!
+    loadPresetSolarSystem();
+
+    // Start Animation Loop
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
